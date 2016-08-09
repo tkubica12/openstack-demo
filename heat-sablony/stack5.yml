@@ -1,0 +1,195 @@
+heat_template_version: 2013-05-23
+
+description: Webova farma
+
+parameters:
+  typ_instance:
+    type: string
+    label: Typ instance
+    description: Vyberte si flavor m1.tiny nebo m1.small
+    constraints:
+      - allowed_values: [ m1.tiny, m1.small ]
+        description: Pripustne hodnoty jsou m1.tiny nebo m1.small
+
+resources:
+  sit1:
+    type: OS::Neutron::Net
+    properties:
+      name: stackSit1
+  
+  subnet1:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: sit1 }
+      cidr: 192.168.10.0/24
+      allocation_pools:
+        - start: 192.168.10.100
+          end: 192.168.10.200
+
+  stackRouter:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: ext-net
+
+  stackRouter_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: stackRouter }
+      subnet_id: { get_resource: subnet1 }
+
+  sitovy_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: sit1 }
+      fixed_ips:
+        - subnet_id: { get_resource: subnet1 }
+
+  prvniVM_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: ext-net
+      port_id: { get_resource: sitovy_port }      
+        
+  prvniVM:
+    type: OS::Nova::Server
+    properties:
+      key_name: mujKlic
+      image: cirros-0.3.4-x86_64
+      flavor: { get_param: typ_instance }
+      networks:
+        - port: { get_resource: sitovy_port }
+
+  prvniVolume:
+    type: OS::Cinder::Volume
+    properties:
+      size: 1
+      
+  vol1_att:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      instance_uuid: { get_resource: prvniVM }
+      volume_id: { get_resource: prvniVolume }
+      mountpoint: /dev/vdb
+
+  web_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      description: Webovy pristup
+      name: web-SG
+      rules:
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          port_range_min: 80
+          port_range_max: 80
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+      
+  web_sit:
+    type: OS::Neutron::Net
+    properties:
+      name: webSit
+  
+  web_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: web_sit }
+      cidr: 192.168.20.0/24
+      allocation_pools:
+        - start: 192.168.20.100
+          end: 192.168.20.200
+
+  stackRouter_interface2:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: stackRouter }
+      subnet_id: { get_resource: web_subnet }
+
+  webVM1_interface:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: web_sit }
+      fixed_ips:
+        - subnet_id: { get_resource: web_subnet }
+      security_groups: [{ get_resource: web_security_group }]
+
+  webVM2_interface:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: web_sit }
+      fixed_ips:
+        - subnet_id: { get_resource: web_subnet }
+      security_groups: [{ get_resource: web_security_group }]
+
+  webVM1:
+    type: OS::Nova::Server
+    properties:
+      key_name: mujKlic
+      image: webNode
+      flavor: m1.small
+      networks:
+        - port: { get_resource: webVM1_interface }
+
+  webVM2:
+    type: OS::Nova::Server
+    properties:
+      key_name: mujKlic
+      image: webNode
+      flavor: m1.small
+      networks:
+        - port: { get_resource: webVM2_interface }
+        
+  health:
+    type: OS::Neutron::HealthMonitor
+    properties:
+      type: HTTP
+      delay: 1
+      max_retries: 1
+      timeout: 1
+   
+  pool:
+    type: OS::Neutron::Pool
+    properties:
+      lb_method: ROUND_ROBIN
+      protocol: HTTP
+      subnet_id: {get_resource: web_subnet}
+      monitors: [{get_resource: health}]
+      vip:
+        protocol_port: 80
+  
+  lb_member_webVM1:
+    type: OS::Neutron::PoolMember
+    properties:
+      pool_id: {get_resource: pool}
+      address: {get_attr: [webVM1, first_address]}
+      protocol_port: 80
+
+  lb_member_webVM2:
+    type: OS::Neutron::PoolMember
+    properties:
+      pool_id: {get_resource: pool}
+      address: {get_attr: [webVM2, first_address]}
+      protocol_port: 80
+      
+  balancer:
+    type: OS::Neutron::LoadBalancer
+    properties:
+      protocol_port: 80
+      pool_id: {get_resource: pool}
+  
+  balancer_floating:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: ext-net
+      port_id: {get_attr: [pool, vip, port_id]}
+      
+outputs:
+  ip_instance:
+    description: IP adresa vysledne instance
+    value: { get_attr: [prvniVM, first_address] }
+  float_ip_instance:
+    description: Venkovni IP adresa vysledne instance
+    value: { get_attr: [prvniVM_floating_ip, floating_ip_address] }
+  float_ip_lb:
+    description: Virtualni IP balanceru
+    value: { get_attr: [balancer_floating, floating_ip_address] }

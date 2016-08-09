@@ -1,0 +1,23 @@
+{
+  "builders": [{
+    "type": "openstack",
+    "ssh_username": "ubuntu",
+    "image_name": "mujPackerImage",
+    "source_image": "bb0eba2a-6ce1-4393-b89f-4a219add5da7",
+    "flavor": "l1.small",
+    "networks": ["5431eac3-92cb-4464-8cd2-51ceb6804ed4"],
+    "security_groups": ["default", "SSH+ICMP"],
+    "use_floating_ip": true,
+    "floating_ip": "10.201.0.13",
+    "floating_ip_pool": "ext-net"
+  }],
+  "provisioners": [{
+    "type": "shell",
+    "inline": [
+      "export http_proxy=http://web-proxy.corp.hp.com:8088",
+      "sudo -E apt-get update",
+      "sudo -E apt-get install nginx -y",
+      "printf 'Web server zabaleny Packerem\n\n' | sudo tee /usr/share/nginx/html/index.html"
+      ]
+  }]
+}

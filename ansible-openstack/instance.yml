@@ -1,0 +1,9 @@
+---
+- hosts: localhost
+  tasks:
+  - name: Nacti vsechny instance
+    os_server_facts:
+
+  - name: Vypis co vis o instancich
+    debug:
+      var: openstack_servers

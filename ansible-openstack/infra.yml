@@ -1,0 +1,75 @@
+---
+- hosts: localhost
+  vars:
+    stav: present
+    porty:
+      - 22
+      - 80
+      - 443
+      - 8080
+    servery:
+      - AnsibleIns1
+      - AnsibleIns2
+  tasks:
+  - name: Pokud je to pozadovano, smaz server
+    os_server:
+      state: "{{ stav }}"
+      name: "{{ item }}"
+      image: Cirros
+      flavor: m1.tiny
+      network: AnsibleNet
+    with_items: "{{ servery }}"
+    when: stav == "absent"
+
+  - name: Ujisti se, ze Security Group je v pozadovanem stavu
+    os_security_group:
+      state: "{{ stav }}"
+      name: AnsibleSG
+
+  - name: Ujisti se, ze Security Group povoluje potrebne porty
+    os_security_group_rule:
+      security_group: AnsibleSG
+      protocol: tcp
+      port_range_min: "{{ item }}"
+      port_range_max: "{{ item }}"
+    with_items: "{{ porty }}"
+    when: stav == "present"
+
+  - name: Pokud je to pozadovano, smaz router
+    os_router:
+      state: "{{ stav }}"
+      name: AnsibleRouter
+      network: ext-net
+      interfaces:
+        - AnsibleSub
+    when: stav == "absent"
+
+  - name: Ujisti se, ze mame vytvorenou sit
+    os_network:
+      state: "{{ stav }}"
+      name: AnsibleNet
+
+  - name: Ujisti se, ze v siti je potrebny subnet
+    os_subnet:
+      network_name: AnsibleNet
+      name: AnsibleSub
+      cidr: 192.168.77.1/24
+    when: stav == "present"
+
+  - name: Pokud je to pozadovano, vytvor router a pripoj sit
+    os_router:
+      state: "{{ stav }}"
+      name: AnsibleRouter
+      network: ext-net
+      interfaces:
+        - AnsibleSub
+    when: stav == "present"
+
+  - name: Ujisti se, ze servery jsou vytvoreny
+    os_server:
+      name: "{{ item }}"
+      image: Cirros
+      flavor: m1.tiny
+      network: AnsibleNet
+    with_items: "{{ servery }}"
+    when: stav == "present"

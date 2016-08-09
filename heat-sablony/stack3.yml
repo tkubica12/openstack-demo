@@ -1,0 +1,60 @@
+heat_template_version: 2013-05-23
+
+description: Zkusime i volume
+
+parameters:
+  typ_instance:
+    type: string
+    label: Typ instance
+    description: Vyberte si flavor m1.tiny nebo m1.small
+    constraints:
+      - allowed_values: [ m1.tiny, m1.small ]
+        description: Pripustne hodnoty jsou m1.tiny nebo m1.small
+
+resources:
+  sit1:
+    type: OS::Neutron::Net
+    properties:
+      name: stackSit1
+  
+  subnet1:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: sit1 }
+      cidr: 192.168.10.0/24
+      allocation_pools:
+        - start: 192.168.10.100
+          end: 192.168.10.200
+
+  sitovy_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: sit1 }
+      fixed_ips:
+        - subnet_id: { get_resource: subnet1 }
+
+  prvniVM:
+    type: OS::Nova::Server
+    properties:
+      key_name: mujKlic
+      image: cirros-0.3.4-x86_64
+      flavor: { get_param: typ_instance }
+      networks:
+        - port: { get_resource: sitovy_port }
+
+  prvniVolume:
+    type: OS::Cinder::Volume
+    properties:
+      size: 1
+      
+  vol1_att:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      instance_uuid: { get_resource: prvniVM }
+      volume_id: { get_resource: prvniVolume }
+      mountpoint: /dev/vdb
+      
+outputs:
+  ip_instance:
+    description: IP adresa vysledne instance
+    value: { get_attr: [prvniVM, first_address] }

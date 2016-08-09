@@ -1,0 +1,14 @@
+---
+- hosts: localhost
+  vars:
+    stav: present
+    disky:
+      - AnsibleVol1
+      - AnsibleVol2      
+  tasks:
+  - name: Ujisti se, ze volume je v pozadovanem stavu
+    os_volume:
+      state: "{{ stav }}"
+      size: 1
+      display_name: "{{ item }}"
+    with_items: "{{ disky }}"

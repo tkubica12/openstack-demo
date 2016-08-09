@@ -1,0 +1,32 @@
+{
+  "builders": [{
+    "type": "openstack",
+    "ssh_username": "ubuntu",
+    "image_name": "Docker",
+    "source_image": "8490e531-6c9d-4caa-8e15-61e5f749b0ff",
+    "flavor": "m1.small",
+    "networks": ["b830b33d-06fc-470a-aa12-ec4e709ef3c4"],
+    "use_floating_ip": true,
+    "floating_ip": "10.201.0.12",
+    "floating_ip_pool": "ext-net"
+  }],
+  "provisioners": [{
+    "type": "shell",
+    "inline": [
+      "export http_proxy=http://web-proxy.corp.hp.com:8088",
+      "export https_proxy=http://web-proxy.corp.hp.com:8088",
+      "sudo -E apt-get update",
+      "sudo -E curl -sSL https://get.docker.com/ | sh",
+      "sudo -E usermod -aG docker ubuntu",
+      "sudo -E wget https://github.com/docker/machine/releases/download/v0.5.4/docker-machine_linux-amd64 -O /usr/local/bin/docker-machine",
+      "sudo -E chmod +x /usr/local/bin/docker-machine",
+      "sudo -E wget https://github.com/docker/compose/releases/download/1.5.2/docker-compose-Linux-x86_64 -O /usr/local/bin/docker-compose",
+      "sudo -E chmod +x /usr/local/bin/docker-compose",
+      "sudo mkdir /etc/systemd/system/docker.service.d",
+      "printf 'export http_proxy=http://web-proxy.corp.hp.com:8088\n' | sudo tee -a /etc/default/docker",
+      "printf 'http_proxy=http://web-proxy.corp.hp.com:8088\n' | sudo tee -a /etc/environment",
+      "printf 'https_proxy=http://web-proxy.corp.hp.com:8088\n' | sudo tee -a /etc/environment",
+      "printf 'no_proxy=localhost,10.0.0.7,16.21.188.203\n' | sudo tee -a /etc/environment"
+      ]
+  }]
+}
